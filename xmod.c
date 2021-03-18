@@ -1,17 +1,11 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include <stdbool.h>
-#include <sys/stat.h>
+#include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "utilities.h"
-
-struct option {
-    bool verbose;
-    bool cVerbose;
-    bool recursive;
-};
 
 int processMode(const char *mode_string, bool ugo[3], mode_t *new_mode, int *set_mode) {
   
@@ -152,88 +146,9 @@ int getFinalMode(char *path, bool ugo[3], mode_t new_mode, int set_mode, struct 
   return 0;
 }
 
-int recursiveSearch(char *path, bool ugo[3], mode_t new_mode, int set_mode, struct stat stat_buffer) {
+
+
+int xmod (char *path, bool ugo[3], mode_t new_mode, int set_mode, struct stat stat_buffer) {
+
   return 0;
 }
-
-
-int main(int argc, char** argv) {
-
-    char *temp_dir = "file.txt";
-    char *dir;
-
-
-    // if (argc < 4) {
-    //     fprintf(stderr, "Not enough arguments.\n");
-    //     return 1;
-    // }
-    
-    /* [OPTIONS] */
-    char opt;
-    int arg = 1;
-    struct option options;
-    while ((opt = getopt (argc, argv, "vcR")) != -1) { 
-        switch (opt) {
-        case 'v':
-            options.verbose = true;
-            arg++;
-            break;
-        case 'c':
-            options.cVerbose = true;
-            arg++;
-            break;
-        case 'R':
-            options.recursive = true;
-            arg++;
-            break;
-        default:
-            fprintf(stderr, "Argument in wrong format.\n");
-            return 1;
-        }
-    }
-    
-    /* MODE */
-    char *mode_string = NULL;
-    mode_t new_mode = 0;
-    int set_mode = -1;
-    bool ugo[3] = {0, 0, 0};
-    mode_string = argv[arg];
-    arg++;    
-    processMode(mode_string, ugo, &new_mode, &set_mode);
-
-    /* FILE/DIR */
-    while (argv[arg]) {
-      struct stat stat_buffer;
-      char *path = argv[arg];
-      if (stat (path, &stat_buffer)) {
-        fprintf(stderr,"Check path name.\n");
-        return 1;
-      }
-      bool is_dir = stat_buffer.st_mode & S_IFDIR;
-      mode_t file_mode = stat_buffer.st_mode & ~S_IFMT;
-      if (options.recursive && is_dir) {
-        recursiveSearch(path, ugo, new_mode, set_mode, stat_buffer);
-      }
-      else {
-        mode_t final_mode = 0;
-        getFinalMode(path, ugo, new_mode, set_mode, stat_buffer, &final_mode);
-        // chmod(path, final_mode);
-      }
-      arg++;
-    }
-    
-    return 0;
-}
-
-
-  /* USEFUL CODE */
-
-
-
-  //     #ifndef __MINGW32__
-  //   bool is_dir;
-  // #endif
-  //   mode_t mode_mask, file_mode, new_mode;
-  //   struct stat stat_buf;
-
-  //   /* Read the current file mode. */
