@@ -1,223 +1,302 @@
-#include <sys/stat.h>        /* For stat, chmod and umask.  */
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <sys/stat.h>
+#include <string.h>
+#include <unistd.h>
+#include <signal.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
+#include "utilities.h"
 
-static int char_to_mode_t (char *file, char *mode, gfc_charlen_type mode_len){
+void inthandler(int signo);
+void childhandler(int signo);
+int processMode(const char *mode_string, bool ugo[3], mode_t *new_mode, int *set_mode);
+int getFinalMode(char *path, bool ugo[3], mode_t new_mode, int set_mode, struct stat stat_buffer, mode_t *final_mode);
+int recursiveSearch(char *path, bool ugo[3], mode_t new_mode, int set_mode, struct stat stat_buffer);
+int nftot = 0;
+int nfmod = 0;
+char* path;
 
-  int i;
-  bool ugo[3];
-  bool rwx[3];
-  int set_mode, part;
-  bool continue_clause = false;
-  //idk
-#ifndef __MINGW32__
-  bool is_dir;
-#endif
-  mode_t mode_mask, file_mode, new_mode;
-  struct stat stat_buf;
-  if (mode_len == 0)
-    return 1;
+int main(int argc, char** argv) {
 
-  if (mode[0] >= '0' && mode[0] <= '9')
-    {
-      unsigned fmode;
-      if (sscanf (mode, "%o", &fmode) != 1)
+    char *temp_dir = "file.txt";
+    char *dir;
+    signal(SIGCHLD, childhandler);
+    signal(SIGINT, inthandler);
+
+    // if (argc < 4) {
+    //     fprintf(stderr, "Not enough arguments.\n");
+    //     return 1;
+    // }
+    
+    /* [OPTIONS] */
+    char opt;
+    int arg = 1;
+    struct option options;
+    while ((opt = getopt (argc, argv, "vcR")) != -1) { 
+        switch (opt) {
+        case 'v':
+            options.verbose = true;
+            arg++;
+            break;
+        case 'c':
+            options.cVerbose = true;
+            arg++;
+            break;
+        case 'R':
+            options.recursive = true;
+            arg++;
+            break;
+        default:
+            fprintf(stderr, "Argument in wrong format.\n");
+            return 1;
+        }
+    }
+    
+    /* MODE */
+    char *mode_string = NULL;
+    mode_t new_mode = 0;
+    int set_mode = -1;
+    bool ugo[3] = {0, 0, 0};
+    mode_string = argv[arg];
+    arg++;    
+    processMode(mode_string, ugo, &new_mode, &set_mode);
+
+    /* FILE/DIR */
+    while (argv[arg]) {
+      struct stat stat_buffer;
+      path = argv[arg];
+      if (stat (path, &stat_buffer)) {
+        fprintf(stderr,"Check path name.\n");
         return 1;
-      return chmod (file, (mode_t) fmode);
+      }
+      else nftot++;
+      sleep(10);
+
+      bool is_dir = stat_buffer.st_mode & S_IFDIR;
+      mode_t file_mode = stat_buffer.st_mode & ~S_IFMT;
+      if (options.recursive && is_dir) {
+        recursiveSearch(path, ugo, new_mode, set_mode, stat_buffer);
+      }
+      else {
+        mode_t final_mode = 0;
+        getFinalMode(path, ugo, new_mode, set_mode, stat_buffer, &final_mode);
+        sleep(10);
+         chmod(path, final_mode);
+      }
+      arg++;
     }
-  /* Read the current file mode. */
-  if (stat (file, &stat_buf))
-    return 1;
-  file_mode = stat_buf.st_mode & ~S_IFMT;
-
-  //idk
-#ifndef __MINGW32__
-  is_dir = stat_buf.st_mode & S_IFDIR;
-#endif
-
-  for (i = 0; i < mode_len; i++)
-    {
-      if (!continue_clause)
-        {
-          ugo[0] = false;
-          ugo[1] = false;
-          ugo[2] = false;
-
-        }
-      continue_clause = false; 
-      rwx[0] = false;
-      rwx[1] = false;
-      rwx[2] = false;
-      part = 0;
-      set_mode = -1;
-      for (; i < mode_len; i++)
-        {
-          switch (mode[i])
-            {
-            /* User setting: a[ll]/u[ser]/g[roup]/o[ther].  */
-            case 'a':
-              if (part != 0)
-                return 1;
-              ugo[0] = true;
-              ugo[1] = true;
-              ugo[2] = true;
-              part = 1;
-              break;
-
-            case 'u':
-              if (part != 0)
-                return 1;
-              ugo[0] = true;
-              part = 1;
-              break;
-
-            case 'g':
-              if (part != 0)
-                return 1;
-              ugo[1] = true;
-              part = 1;
-              break;
-
-            case 'o':
-              if (part != 0)
-                return 1;
-              ugo[2] = true;
-              part = 1;
-              break;
-
-            /* Mode setting: =+-.  */
-            case '=':
-              if (part != 1)
-                {
-                  continue_clause = true;
-                  i--;
-                  part = 2;
-                  goto clause_done;
-                }
-              set_mode = 1;
-              part = 2;
-              break;
-
-            case '-':
-              if (part != 1)
-                {
-                  continue_clause = true;
-                  i--;
-                  part = 2;
-                  goto clause_done;
-                }
-              set_mode = 2;
-              part = 2;
-              break;
-
-            case '+':
-              if (part != 1)
-                {
-                  continue_clause = true;
-                  i--;
-                  part = 2;
-                  goto clause_done;
-                }
-              set_mode = 3;
-              part = 2;
-              break;
-
-            /* Permissions: rwx */
-            case 'r':
-              if (part != 2 && part != 3)
-                return 1;
-              rwx[0] = true;
-              part = 3;
-              break;
-
-            case 'w':
-              if (part != 2 && part != 3)
-                return 1;
-              rwx[1] = true;
-              part = 3;
-              break;
-
-            case 'x':
-              if (part != 2 && part != 3)
-                return 1;
-              rwx[2] = true;
-              part = 3;
-              break;
-
-            default:
-              return 1;
-            }
-        }
-clause_done:
-      if (part < 2)
-        return 1;
-      new_mode = 0;
-
-      /* Read. */
-      if (rwx[0])
-        {
-          if (ugo[0])
-            new_mode |= S_IRUSR;
-          if (ugo[1])
-            new_mode |= S_IRGRP;
-          if (ugo[2])
-            new_mode |= S_IROTH;
-        }
-      /* Write.  */
-      if (rwx[1])
-        {
-          if (ugo[0])
-            new_mode |= S_IWUSR;
-          if (ugo[1])
-            new_mode |= S_IWGRP;
-          if (ugo[2])
-            new_mode |= S_IWOTH;
-        }
-      /* Execute. */
-      if (rwx[2])
-        {
-          if (ugo[0])
-            new_mode |= S_IXUSR;
-          if (ugo[1])
-            new_mode |= S_IXGRP;
-          if (ugo[2])
-            new_mode |= S_IXOTH;
-        }
-
-
-    if (set_mode == 1){
-
-        /* Set '='.  */
-        if ((ugo[0]))
-          file_mode = (file_mode & ~(S_ISUID | S_IRUSR | S_IWUSR | S_IXUSR))
-                      | (new_mode & (S_ISUID | S_IRUSR | S_IWUSR | S_IXUSR));
-        if ((ugo[1]))
-          file_mode = (file_mode & ~(S_ISGID | S_IRGRP | S_IWGRP | S_IXGRP))
-                      | (new_mode & (S_ISGID | S_IRGRP | S_IWGRP | S_IXGRP));
-        if ((ugo[2]))
-          file_mode = (file_mode & ~(S_IROTH | S_IWOTH | S_IXOTH))
-                      | (new_mode & (S_IROTH | S_IWOTH | S_IXOTH));
-//idk
-/*
-#ifndef __VXWORKS__
-        if (is_dir && rwxXstugo[5])
-          file_mode |= S_ISVTX;
-        else if (!is_dir)
-          file_mode &= ~S_ISVTX;
-#endif
-*/
-
-    }
-    else if (set_mode == 2){
-
-        /* Clear '-'.  */
-        file_mode &= ~new_mode;
-    }
-
-    else if (set_mode == 3){
-
-        /* Add '+'.  */
-        file_mode |= new_mode;
-    }
-  }
-  return chmod (file, file_mode);
+    
+    return 0;
 }
+
+int processMode(const char *mode_string, bool ugo[3], mode_t *new_mode, int *set_mode) {
+  
+    bool rwx[3] = {0, 0, 0};
+
+    /* OCTAL MODE */
+    if (mode_string[0] == '0') {
+        unsigned int temp_mode;
+        if (sscanf(mode_string, "%o", &temp_mode) != 1) {
+            exit(1);
+        }
+        *new_mode = (mode_t) temp_mode;
+        return 0;
+    }
+
+    /* <ugoa><-+=><rwx> MODE */
+    //Needs at least 1 char in <ugoa>, 1 char in <-+=> and 1 char in <rwx>
+    if (strlen(mode_string) < MIN_MODE_SIZE) {
+        fprintf(stderr, "Mode string is too small.\n");
+        exit(1);
+    }
+
+    //Has at most 1 char in <ugoa>, 1 char in <-+=> and 3 chars in <rwx>
+    if (strlen(mode_string) > MAX_MODE_SIZE) {
+        fprintf(stderr, "Mode string is too big.\n");
+        exit(1);
+    }
+
+    switch (mode_string[0]){
+    case 'u':
+        ugo[0] = true;
+        break;
+    case 'g':
+        ugo[1] = true;
+        break;
+    case 'o':
+        ugo[2] = true;
+        break;
+    case 'a':
+        ugo[0] = true;
+        ugo[1] = true;
+        ugo[2] = true;
+        break;
+    default:
+        fprintf(stderr, "Character 1 in mode isn't valid.\n");
+        exit(1);
+    }
+
+    switch (mode_string[1]){
+    case '-':
+        *set_mode = 0;
+        break;
+    case '+':
+        *set_mode = 1;     
+        break;
+    case '=':
+        *set_mode = 2;     
+        break;
+    default:
+        fprintf(stderr, "Character 2 in mode isn't valid.\n");
+        exit(1);
+    }
+
+    for (int i = 2; i < strlen(mode_string); i++) {
+        switch (mode_string[i]){
+        case 'r':
+            rwx[0] = true;
+            break;
+        case 'w':
+            rwx[1] = true;
+            break;
+        case 'x':
+            rwx[2] = true;
+            break;
+        default:
+            fprintf(stderr, "Character %i in mode isn't valid.\n", i);
+            exit(1);
+        }
+    }
+
+    if (rwx[0]) {
+          if (ugo[0])
+            *new_mode |= S_IRUSR;
+          if (ugo[1])
+            *new_mode |= S_IRGRP;
+          if (ugo[2])
+            *new_mode |= S_IROTH;
+        }
+    if (rwx[1]) {
+          if (ugo[0])
+            *new_mode |= S_IWUSR;
+          if (ugo[1])
+            *new_mode |= S_IWGRP;
+          if (ugo[2])
+            *new_mode |= S_IWOTH;
+        }
+    if (rwx[2]) {
+          if (ugo[0])
+            *new_mode |= S_IXUSR;
+          if (ugo[1])
+            *new_mode |= S_IXGRP;
+          if (ugo[2])
+            *new_mode |= S_IXOTH;
+        }
+
+    return 0;
+}
+
+int getFinalMode(char *path, bool ugo[3], mode_t new_mode, int set_mode, struct stat stat_buffer, mode_t *final_mode) {
+  mode_t file_mode;
+  file_mode = stat_buffer.st_mode & ~S_IFMT;
+
+  switch (set_mode) {
+
+  // - case
+  case 0:
+    *final_mode = (file_mode & ~new_mode);
+    break;
+
+  // + case
+  case 1:
+    *final_mode = (file_mode | new_mode);
+    break;
+    
+  // = case
+  case 2:
+    if ((ugo[0]))
+      *final_mode = (file_mode & ~(S_ISUID | S_IRUSR | S_IWUSR | S_IXUSR)) | (new_mode & (S_ISUID | S_IRUSR | S_IWUSR | S_IXUSR));
+    if ((ugo[1]))
+      *final_mode = (file_mode & ~(S_ISGID | S_IRGRP | S_IWGRP | S_IXGRP)) | (new_mode & (S_ISGID | S_IRGRP | S_IWGRP | S_IXGRP));
+    if ((ugo[2]))
+      *final_mode = (file_mode & ~(S_IROTH | S_IWOTH | S_IXOTH)) | (new_mode & (S_IROTH | S_IWOTH | S_IXOTH));
+    break;
+  default:
+    exit(1);
+  }
+
+  if (file_mode != *final_mode) nfmod++;
+
+  return 0;
+}
+
+int recursiveSearch(char *path, bool ugo[3], mode_t new_mode, int set_mode, struct stat stat_buffer) {
+  return 0;
+}
+
+
+void inthandler(int signo){
+    pid_t pid;
+    int n;
+    pid = getpid();
+    char filedir[100] = "bl";
+    printf("\n%d ; %s ; %d ; %d\n", pid, path, nftot, nfmod);
+    puts("\n\nTerminate(t) or proceed(any key)?");
+    char strvar[1];
+    sleep(3);
+    fgets (strvar, 5, stdin);
+    if (strvar[0] == 't')
+      exit(0);
+    else
+      puts("\n\nThe program will continue normally");
+}
+
+void childhandler(int signo){
+    pid_t pid;
+    int status;
+    pid = wait(&status);
+    printf("Child with PID %d exited with status 0x%x.\n", pid, status);
+}
+
+
+  /* USEFUL CODE */
+
+
+
+  //     #ifndef __MINGW32__
+  //   bool is_dir;
+  // #endif
+  //   mode_t mode_mask, file_mode, new_mode;
+  //   struct stat stat_buf;
+
+  //   /* Read the current file mode. */
+
+
+/*
+pid_t pids[10];
+int i;
+int n = 10;
+
+// Start children.
+for (i = 0; i < n; ++i) {
+  if ((pids[i] = fork()) < 0) {
+    perror("fork");
+    abort();
+  } else if (pids[i] == 0) {
+    DoWorkInChild();
+    exit(0);
+  }
+}
+
+// Wait for children to exit.
+int status;
+pid_t pid;
+while (n > 0) {
+  pid = wait(&status);
+  printf("Child with PID %ld exited with status 0x%x.\n", (long)pid, status);
+  --n;  // TODO(pts): Remove pid from the pids array.
+}
+*/
