@@ -4,14 +4,95 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <unistd.h>
+#include <signal.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #include "utilities.h"
 
-struct option {
-    bool verbose;
-    bool cVerbose;
-    bool recursive;
-};
+
+
+void inthandler(int signo);
+void childhandler(int signo);
+int processMode(const char *mode_string, bool ugo[3], mode_t *new_mode, int *set_mode);
+int getFinalMode(char *path, bool ugo[3], mode_t new_mode, int set_mode, struct stat stat_buffer, mode_t *final_mode);
+int recursiveSearch(char *path, bool ugo[3], mode_t new_mode, int set_mode, struct stat stat_buffer);
+int nftot = 0;
+int nfmod = 0;
+char* path;
+
+int main(int argc, char** argv) {
+
+    char *temp_dir = "file.txt";
+    char *dir;
+    signal(SIGCHLD, childhandler);
+    signal(SIGINT, inthandler);
+
+    // if (argc < 4) {
+    //     fprintf(stderr, "Not enough arguments.\n");
+    //     return 1;
+    // }
+    
+    /* [OPTIONS] */
+    char opt;
+    int arg = 1;
+    struct option options;
+    while ((opt = getopt (argc, argv, "vcR")) != -1) { 
+        switch (opt) {
+        case 'v':
+            options.verbose = true;
+            arg++;
+            break;
+        case 'c':
+            options.cVerbose = true;
+            arg++;
+            break;
+        case 'R':
+            options.recursive = true;
+            arg++;
+            break;
+        default:
+            fprintf(stderr, "Argument in wrong format.\n");
+            return 1;
+        }
+    }
+    
+    /* MODE */
+    char *mode_string = NULL;
+    mode_t new_mode = 0;
+    int set_mode = -1;
+    bool ugo[3] = {0, 0, 0};
+    mode_string = argv[arg];
+    arg++;    
+    processMode(mode_string, ugo, &new_mode, &set_mode);
+
+    /* FILE/DIR */
+    while (argv[arg]) {
+      struct stat stat_buffer;
+      path = argv[arg];
+      if (stat (path, &stat_buffer)) {
+        fprintf(stderr,"Check path name.\n");
+        return 1;
+      }
+      else nftot++;
+      sleep(10);
+
+      bool is_dir = stat_buffer.st_mode & S_IFDIR;
+      mode_t file_mode = stat_buffer.st_mode & ~S_IFMT;
+      if (options.recursive && is_dir) {
+        recursiveSearch(path, ugo, new_mode, set_mode, stat_buffer);
+      }
+      else {
+        mode_t final_mode = 0;
+        getFinalMode(path, ugo, new_mode, set_mode, stat_buffer, &final_mode);
+        sleep(10);
+         chmod(path, final_mode);
+      }
+      arg++;
+    }
+    
+    return 0;
+}
 
 int processMode(const char *mode_string, bool ugo[3], mode_t *new_mode, int *set_mode) {
   
@@ -90,6 +171,7 @@ int processMode(const char *mode_string, bool ugo[3], mode_t *new_mode, int *set
             fprintf(stderr, "Character %i in mode isn't valid.\n", i);
             exit(1);
         }
+
     }
 
     if (rwx[0]) {
@@ -120,6 +202,7 @@ int processMode(const char *mode_string, bool ugo[3], mode_t *new_mode, int *set
     return 0;
 }
 
+
 int getFinalMode(char *path, bool ugo[3], mode_t new_mode, int set_mode, struct stat stat_buffer, mode_t *final_mode) {
   mode_t file_mode;
   file_mode = stat_buffer.st_mode & ~S_IFMT;
@@ -148,6 +231,9 @@ int getFinalMode(char *path, bool ugo[3], mode_t new_mode, int set_mode, struct 
   default:
     exit(1);
   }
+  
+   if (file_mode != *final_mode) nfmod++;
+
 
   return 0;
 }
@@ -157,72 +243,27 @@ int recursiveSearch(char *path, bool ugo[3], mode_t new_mode, int set_mode, stru
 }
 
 
-int main(int argc, char** argv) {
 
-    char *temp_dir = "file.txt";
-    char *dir;
+void inthandler(int signo){
+    pid_t pid;
+    int n;
+    pid = getpid();
+    printf("\n%d ; %s ; %d ; %d\n", pid, path, nftot, nfmod);
+    puts("\n\nTerminate(t) or proceed(any key)?");
+    char strvar[1];
+    sleep(3);
+    fgets (strvar, 5, stdin);
+    if (strvar[0] == 't')
+      exit(0);
+    else
+      puts("\n\nThe program will continue normally");
+}
 
-
-    // if (argc < 4) {
-    //     fprintf(stderr, "Not enough arguments.\n");
-    //     return 1;
-    // }
-    
-    /* [OPTIONS] */
-    char opt;
-    int arg = 1;
-    struct option options;
-    while ((opt = getopt (argc, argv, "vcR")) != -1) { 
-        switch (opt) {
-        case 'v':
-            options.verbose = true;
-            arg++;
-            break;
-        case 'c':
-            options.cVerbose = true;
-            arg++;
-            break;
-        case 'R':
-            options.recursive = true;
-            arg++;
-            break;
-        default:
-            fprintf(stderr, "Argument in wrong format.\n");
-            return 1;
-        }
-    }
-    
-    /* MODE */
-    char *mode_string = NULL;
-    mode_t new_mode = 0;
-    int set_mode = -1;
-    bool ugo[3] = {0, 0, 0};
-    mode_string = argv[arg];
-    arg++;    
-    processMode(mode_string, ugo, &new_mode, &set_mode);
-
-    /* FILE/DIR */
-    while (argv[arg]) {
-      struct stat stat_buffer;
-      char *path = argv[arg];
-      if (stat (path, &stat_buffer)) {
-        fprintf(stderr,"Check path name.\n");
-        return 1;
-      }
-      bool is_dir = stat_buffer.st_mode & S_IFDIR;
-      mode_t file_mode = stat_buffer.st_mode & ~S_IFMT;
-      if (options.recursive && is_dir) {
-        recursiveSearch(path, ugo, new_mode, set_mode, stat_buffer);
-      }
-      else {
-        mode_t final_mode = 0;
-        getFinalMode(path, ugo, new_mode, set_mode, stat_buffer, &final_mode);
-        // chmod(path, final_mode);
-      }
-      arg++;
-    }
-    
-    return 0;
+void childhandler(int signo){
+    pid_t pid;
+    int status;
+    pid = wait(&status);
+    printf("Child with PID %d exited with status 0x%x.\n", pid, status);
 }
 
 
@@ -237,3 +278,31 @@ int main(int argc, char** argv) {
   //   struct stat stat_buf;
 
   //   /* Read the current file mode. */
+
+
+
+/*
+pid_t pids[10];
+int i;
+int n = 10;
+
+// Start children.
+for (i = 0; i < n; ++i) {
+  if ((pids[i] = fork()) < 0) {
+    perror("fork");
+    abort();
+  } else if (pids[i] == 0) {
+    DoWorkInChild();
+    exit(0);
+  }
+}
+
+// Wait for children to exit.
+int status;
+pid_t pid;
+while (n > 0) {
+  pid = wait(&status);
+  printf("Child with PID %ld exited with status 0x%x.\n", (long)pid, status);
+  --n;  // TODO(pts): Remove pid from the pids array.
+}
+*/
