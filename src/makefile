@@ -1,2 +1,6 @@
 main: main.c xmod.c
-	gcc -o main main.c xmod.c -I.
+	gcc -o xmod main.c xmod.c -I.
+
+
+clean:
+	rm xmod

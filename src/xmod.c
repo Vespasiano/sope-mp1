@@ -188,11 +188,8 @@ int xmod(char *path, char *mode_string) {
     exit(1);
   }
 
-  mode_t final_mode = 0;
-  processMode(mode_string, &final_mode, path, stat_buffer);
-  // chmod(path, final_mode);
 
-  fprintf(stdout, "Am currently in father directory %s\n\n", path);  
+
   if(isdir(path)){
     struct dirent *directory_entry;
     DIR *dr = opendir(path);
@@ -204,7 +201,7 @@ int xmod(char *path, char *mode_string) {
     //Own directory or parent directory
       char *filename = malloc(sizeof(directory_entry->d_name) + sizeof(NULL));
       sprintf(filename, "%s", directory_entry->d_name);
-      if ((strcmp(filename, ".") == 0) | (strcmp(filename, "..") == 0)) { continue; }
+      if ((strcmp(filename, ".") == 0) || (strcmp(filename, "..") == 0)) { continue; }
 
 
       char *new_path = malloc(sizeof(path) + sizeof('/') +sizeof(directory_entry->d_name));
@@ -221,30 +218,20 @@ int xmod(char *path, char *mode_string) {
           char *argv[] = {"./xmod", new_path, mode_string, NULL};
           setenv("LOG_FILENAME", "1", true);
           printf("calling xmod for %s\n", new_path);
-          execl("./xmod", "./xmod", new_path, mode_string, NULL, NULL);
-          printf("process died wtf");
+          execl("./xmod", "./xmod",mode_string, new_path,NULL);
+          perror("execl");
         }
         //Father process
         else {
           printf("path is %s and is parent process of new path %s\n\n", path, new_path);
-          int returnStatus;    
-          waitpid(childPid, &returnStatus, 0);  // Parent process waits here for child to terminate.
-          if (returnStatus == 0)  // Verify child process terminated without error.  
-          {
-          }
+        }
 
-          if (returnStatus == 1)      
-          {
-            fprintf(stderr, "The child process terminated with an error!.");    
-            exit(1);
-          }
           // bool LOG_FILENAME = true; //testing
           //   if (LOG_FILENAME) {
           //     clock_t final_clock = clock();
           //     double instant = (double)(final_clock - initial_clock) / CLOCKS_PER_SEC;
           //     fprintf(stdout, "%f ; %d ; action ; info\n", instant, childPid);
           //   }
-        }
       }
       else {
         //chmod(new_path, final_mode);
@@ -252,6 +239,18 @@ int xmod(char *path, char *mode_string) {
     }
   }
   
+  int returnStatus;  
+  while (wait(&returnStatus) != -1) {
+    if (returnStatus == 0) {  // Child process terminated without error.  
+    }
+    if (returnStatus == 1) {
+      fprintf(stderr, "The child process terminated with an error!.");
+    }
+  }
+
+  mode_t final_mode = 0;
+  processMode(mode_string, &final_mode, path, stat_buffer);
+  // chmod(path, final_mode);
   return 0;
 }
 

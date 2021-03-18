@@ -87,8 +87,8 @@ int main(int argc, char** argv) {
         fprintf(stderr,"Check path name.\n");
         return 1;
       }
-      xmod(path, mode_string);
       mode_t file_mode = stat_buffer.st_mode & ~S_IFMT;
+      xmod();
       if (options.recursive && isdir(path, stat_buffer)) {
 
       }
