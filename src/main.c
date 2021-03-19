@@ -8,20 +8,34 @@
 #include <dirent.h>
 #include <unistd.h>
 
-
+#include "utilities.h"
 #include "xmod.h"
 
 
 
 int main(int argc, char** argv) {
 
+  //Creates environment variable with time since epoch to calculate instant
   struct timeval initial_time_struct;
   gettimeofday(&initial_time_struct, NULL);
-  unsigned long initial_time = initial_time_struct.tv_sec * 1000 + initial_time_struct.tv_usec * 0.001;
+  unsigned long initial_time = initial_time_struct.tv_sec * SECONDS_TO_MILLISECONDS + initial_time_struct.tv_usec * MICROSECONDS_TO_MILLISECONDS;
   char *initial_time_string_ms = malloc(sizeof(initial_time));
   sprintf(initial_time_string_ms, "%lu", initial_time);
   setenv("PROGRAM_TIME_SINCE_EPOCH", initial_time_string_ms, 0);
 
+  //Sets environment variable "PROGRAM_PID" to original process's id
+  pid_t program_pid = getpid();
+  char program_pid_string[100];
+  sprintf(program_pid_string, "%i", (int) program_pid);
+  setenv("PROGRAM_PID", program_pid_string, 0);
+
+  //Opens 
+  if (program_pid == atoi(getenv("PROGRAM_PID"))) {
+    char* log_filename = getenv("LOG_FILENAME");
+    FILE *fptr = fopen(log_filename, "w");
+    fclose(fptr);
+  }
+  
 
   char opt;
   extern int optind;

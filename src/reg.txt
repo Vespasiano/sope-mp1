@@ -1,24 +1,49 @@
-4 ; 5224 ; PROC_CREAT ; u-x test
-19 ; 5225 ; PROC_CREAT ; u-x test/test1
-36 ; 5225 ; PROC_EXIT ; 0
-47 ; 5226 ; PROC_CREAT ; u-x test/test1
-63 ; 5226 ; PROC_EXIT ; 0
-73 ; 5227 ; PROC_CREAT ; u-x test/test1
-90 ; 5227 ; PROC_EXIT ; 0
-100 ; 5224 ; PROC_EXIT ; 0
-108 ; 5228 ; PROC_CREAT ; u-x test
-122 ; 5229 ; PROC_CREAT ; u-x test/test2
-135 ; 5229 ; PROC_EXIT ; 0
-142 ; 5230 ; PROC_CREAT ; u-x test/test2
-156 ; 5230 ; PROC_EXIT ; 0
-164 ; 5231 ; PROC_CREAT ; u-x test/test2
-177 ; 5231 ; PROC_EXIT ; 0
-185 ; 5228 ; PROC_EXIT ; 0
-192 ; 5232 ; PROC_CREAT ; u-x test
-205 ; 5233 ; PROC_CREAT ; u-x test/test3
-218 ; 5233 ; PROC_EXIT ; 0
-225 ; 5234 ; PROC_CREAT ; u-x test/test3
-238 ; 5234 ; PROC_EXIT ; 0
-245 ; 5235 ; PROC_CREAT ; u-x test/test3
-259 ; 5235 ; PROC_EXIT ; 0
-267 ; 5232 ; PROC_EXIT ; 0
+3 ; 9003 ; PROC_CREAT ; -cR u-x test/test1
+14 ; 9004 ; PROC_CREAT ; -cR u-x test/test1/test11
+24 ; 9004 ; FILE_MODF ; test/test1/test11 : 511 : 447
+30 ; 9003 ; SIGNAL_RECV ; SIGChild exited
+38 ; 9004 ; PROC_EXIT ; 0
+44 ; 9005 ; PROC_CREAT ; -cR u-x test/test1/test12
+56 ; 9005 ; FILE_MODF ; test/test1/test12 : 511 : 447
+63 ; 9003 ; SIGNAL_RECV ; SIGChild exited
+71 ; 9005 ; PROC_EXIT ; 0
+78 ; 9006 ; PROC_CREAT ; -cR u-x test/test1/test13
+93 ; 9006 ; FILE_MODF ; test/test1/test13 : 511 : 447
+102 ; 9003 ; SIGNAL_RECV ; SIGChild exited
+111 ; 9006 ; PROC_EXIT ; 0
+117 ; 9003 ; FILE_MODF ; test/test1 : 511 : 447
+125 ; 9002 ; SIGNAL_RECV ; SIGChild exited
+132 ; 9003 ; PROC_EXIT ; 0
+141 ; 9007 ; PROC_CREAT ; -cR u-x test/test2
+155 ; 9008 ; PROC_CREAT ; -cR u-x test/test2/test21
+170 ; 9008 ; FILE_MODF ; test/test2/test21 : 511 : 447
+179 ; 9007 ; SIGNAL_RECV ; SIGChild exited
+184 ; 9008 ; PROC_EXIT ; 0
+191 ; 9009 ; PROC_CREAT ; -cR u-x test/test2/test22
+207 ; 9009 ; FILE_MODF ; test/test2/test22 : 511 : 447
+215 ; 9007 ; SIGNAL_RECV ; SIGChild exited
+221 ; 9009 ; PROC_EXIT ; 0
+228 ; 9010 ; PROC_CREAT ; -cR u-x test/test2/test23
+245 ; 9010 ; FILE_MODF ; test/test2/test23 : 511 : 447
+253 ; 9007 ; SIGNAL_RECV ; SIGChild exited
+261 ; 9010 ; PROC_EXIT ; 0
+270 ; 9007 ; FILE_MODF ; test/test2 : 511 : 447
+278 ; 9002 ; SIGNAL_RECV ; SIGChild exited
+284 ; 9007 ; PROC_EXIT ; 0
+293 ; 9011 ; PROC_CREAT ; -cR u-x test/test3
+307 ; 9012 ; PROC_CREAT ; -cR u-x test/test3/test31
+317 ; 9012 ; FILE_MODF ; test/test3/test31 : 511 : 447
+324 ; 9011 ; SIGNAL_RECV ; SIGChild exited
+330 ; 9012 ; PROC_EXIT ; 0
+340 ; 9013 ; PROC_CREAT ; -cR u-x test/test3/test32
+356 ; 9013 ; FILE_MODF ; test/test3/test32 : 511 : 447
+364 ; 9011 ; SIGNAL_RECV ; SIGChild exited
+372 ; 9013 ; PROC_EXIT ; 0
+379 ; 9014 ; PROC_CREAT ; -cR u-x test/test3/test33
+392 ; 9014 ; FILE_MODF ; test/test3/test33 : 511 : 447
+402 ; 9011 ; SIGNAL_RECV ; SIGChild exited
+408 ; 9014 ; PROC_EXIT ; 0
+414 ; 9011 ; FILE_MODF ; test/test3 : 511 : 447
+422 ; 9002 ; SIGNAL_RECV ; SIGChild exited
+427 ; 9011 ; PROC_EXIT ; 0
+435 ; 9002 ; FILE_MODF ; test : 511 : 447
