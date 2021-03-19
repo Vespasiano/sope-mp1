@@ -4,15 +4,25 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/time.h>
 #include <dirent.h>
 #include <unistd.h>
+
 
 #include "xmod.h"
 
 
 
-
 int main(int argc, char** argv) {
+
+  struct timeval initial_time_struct;
+  gettimeofday(&initial_time_struct, NULL);
+  unsigned long initial_time = initial_time_struct.tv_sec * 1000 + initial_time_struct.tv_usec * 0.001;
+  char *initial_time_string_ms = malloc(sizeof(initial_time));
+  sprintf(initial_time_string_ms, "%lu", initial_time);
+  setenv("PROGRAM_TIME_SINCE_EPOCH", initial_time_string_ms, 0);
+
+
   char opt;
   extern int optind;
   char *options_string = malloc(200 * sizeof(char));
@@ -59,4 +69,3 @@ int main(int argc, char** argv) {
   
   return 0;
 }
-

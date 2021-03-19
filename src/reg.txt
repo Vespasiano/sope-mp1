@@ -1,0 +1,24 @@
+4 ; 5224 ; PROC_CREAT ; u-x test
+19 ; 5225 ; PROC_CREAT ; u-x test/test1
+36 ; 5225 ; PROC_EXIT ; 0
+47 ; 5226 ; PROC_CREAT ; u-x test/test1
+63 ; 5226 ; PROC_EXIT ; 0
+73 ; 5227 ; PROC_CREAT ; u-x test/test1
+90 ; 5227 ; PROC_EXIT ; 0
+100 ; 5224 ; PROC_EXIT ; 0
+108 ; 5228 ; PROC_CREAT ; u-x test
+122 ; 5229 ; PROC_CREAT ; u-x test/test2
+135 ; 5229 ; PROC_EXIT ; 0
+142 ; 5230 ; PROC_CREAT ; u-x test/test2
+156 ; 5230 ; PROC_EXIT ; 0
+164 ; 5231 ; PROC_CREAT ; u-x test/test2
+177 ; 5231 ; PROC_EXIT ; 0
+185 ; 5228 ; PROC_EXIT ; 0
+192 ; 5232 ; PROC_CREAT ; u-x test
+205 ; 5233 ; PROC_CREAT ; u-x test/test3
+218 ; 5233 ; PROC_EXIT ; 0
+225 ; 5234 ; PROC_CREAT ; u-x test/test3
+238 ; 5234 ; PROC_EXIT ; 0
+245 ; 5235 ; PROC_CREAT ; u-x test/test3
+259 ; 5235 ; PROC_EXIT ; 0
+267 ; 5232 ; PROC_EXIT ; 0

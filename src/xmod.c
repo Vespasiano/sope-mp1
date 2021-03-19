@@ -4,14 +4,34 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <time.h>
+#include <sys/time.h>
 #include <sys/wait.h>
 #include <dirent.h>
 #include <unistd.h>
 
-
 #include "utilities.h"
 #include "xmod.h"
+
+
+void inthandler(int signo);
+int nftot = 0;
+int nfmod = 0;
+char* this_path;
+
+void inthandler(int signo){
+    pid_t pid;
+    pid = getpid();
+    printf("\n%d ; %s ; %d ; %d\n", pid, this_path, nftot, nfmod);
+    puts("\n\nTerminate(t) or proceed(any key)?");
+    char strvar;
+    //sleep(3);
+    strvar = getchar();
+    if (strvar == 't')
+      exit(0);
+    else
+      puts("\n\nThe program will continue normally");
+
+}
 
 
 int isdir(const char *path) {
@@ -26,7 +46,7 @@ int processMode(const char *mode_string, mode_t *final_mode, char *path, struct 
   bool rwx[3] = {0, 0, 0};
   bool ugo[3] = {0, 0, 0};
   int set_mode = -1;
-  mode_t new_mode;
+  mode_t new_mode = 0;
 
 
   /* OCTAL MODE */
@@ -156,21 +176,43 @@ int processMode(const char *mode_string, mode_t *final_mode, char *path, struct 
       *final_mode = (file_mode & ~(S_IROTH | S_IWOTH | S_IXOTH)) | (new_mode & (S_IROTH | S_IWOTH | S_IXOTH));
     break;
   }
+
+  if (file_mode != *final_mode) nfmod++;
+
   return 0;
 }
 
 int xmod(char *path, char *mode_string, struct stat stat_buffer, char *options_string, struct option options) {
-  clock_t initial_clock = clock();
+  
+
+  char *initial_time_string_ms = getenv("PROGRAM_TIME_SINCE_EPOCH");
+  unsigned long initial_time_ms = strtoul(initial_time_string_ms, NULL, 0);
 
 
+  signal(SIGINT, inthandler);
 
+  //int st = setenv("LOG_FILENAME", argv[1], 1);
+  char* envVar = getenv("LOG_FILENAME");
+
+  if(envVar) {
+    printf("Var found: %s\n", envVar);
+  }
+  else {
+    printf("Var not found.\n"); 
+  }
+  nftot++;
+  this_path = path;
 
   if(isdir(path) && options.recursive){
     struct dirent *directory_entry;
     DIR *dr = opendir(path);
     if (dr == NULL) {
-      fprintf(stderr, "Could not open directory in path %s", path);
+      fprintf(stderr, "Could not open directory in path %s\n", path);
     }
+
+
+
+
     while ((directory_entry = readdir(dr)) != NULL) {
 
     //Own directory or parent directory
@@ -192,20 +234,81 @@ int xmod(char *path, char *mode_string, struct stat stat_buffer, char *options_s
 
         //Child process
         else if (childPid == 0) {
-          execl("./xmod", "./xmod", options_string, mode_string, new_path, (char *) NULL);
+
+          if(envVar){
+            FILE *fptr = NULL;
+            if ((fptr = fopen(envVar,"a")) == NULL){
+              printf("Error opening LOG_FILENAME file!");
+              exit(1);
+            };
+
+
+
+
+              struct timeval final_time_struct;
+              gettimeofday(&final_time_struct, NULL);
+              unsigned long final_time_ms = final_time_struct.tv_sec * 1000 + final_time_struct.tv_usec * 0.001;
+              unsigned long instant = (final_time_ms - initial_time_ms);
+
+              printf("Time since epoch is %lu - initial\n", initial_time_ms);
+              printf("Time since epoch is %lu - final\n\n", final_time_ms); 
+
+            
+            
+            char* event = "PROC_CREAT";
+            char *info = malloc(sizeof(mode_string) + sizeof(' ') +sizeof(this_path));
+            sprintf(info, "%s%c%s", mode_string, ' ' , this_path);
+
+            fprintf(fptr, "%lu ; %d ; %s ; %s\n", instant, getpid(), event, info);
+            fclose(fptr);
+          }
+
+          printf("calling xmod for %s\n\n", new_path);
+          execl("./xmod", "./xmod",options_string, mode_string, new_path, NULL );
           perror("execl");
         }
         
         //Father process
         else {
+
+          //Waits for all child processes to finish
           int returnStatus;  
           while (wait(&returnStatus) != -1) {
-            if (returnStatus == 0) {  // Child process terminated without error.  
+            if (returnStatus == 0) {  // Child process terminated without error.
             }
             if (returnStatus == 1) {
               fprintf(stderr, "The child process terminated with an error!.");
             }
+            if(envVar){
+            
+              FILE *fptr = NULL;
+              if ((fptr = fopen(envVar,"a")) == NULL){
+                printf("Error opening LOG_FILENAME file!");
+                exit(1);
+              };
+
+              struct timeval final_time_struct;
+              gettimeofday(&final_time_struct, NULL);
+              unsigned long final_time_ms = final_time_struct.tv_sec * 1000 + final_time_struct.tv_usec * 0.001;
+              unsigned long instant = (final_time_ms - initial_time_ms);
+              printf("Time since epoch is %lu - initial\n", initial_time_ms);
+              printf("Time since epoch is %lu - final\n\n", final_time_ms); 
+              
+              
+              char* event = "PROC_EXIT";
+              char *info = malloc(sizeof(mode_string) + sizeof(' ') +sizeof(this_path));
+              sprintf(info, "%d", WEXITSTATUS(returnStatus));
+
+
+
+              fprintf(fptr, "%lu ; %d ; %s ; %s\n", instant, childPid, event, info);
+              fclose(fptr);
+            }
           }
+
+
+
+
         }
       }
 
@@ -217,16 +320,17 @@ int xmod(char *path, char *mode_string, struct stat stat_buffer, char *options_s
        
 
   }
-  //Path isn't a directory or recursive mode isn't set
-  else {
-  }
+  
 
 
-
-
+  mode_t final_mode = 0;
+  processMode(mode_string, &final_mode, path, stat_buffer);
   printf("Processed file %s\n\n", path);
-  // mode_t final_mode = 0;
-  // processMode(mode_string, &final_mode, path, stat_buffer);
-  // chmod(path, final_mode);
+  chmod(path, final_mode);
+
+  
   return 0;
 }
+
+
+
