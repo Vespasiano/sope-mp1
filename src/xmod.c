@@ -9,8 +9,13 @@
 #include <dirent.h>
 #include <unistd.h>
 
-
 #include "utilities.h"
+
+void inthandler(int signo);
+int nftot = 0;
+int nfmod = 0;
+char* this_path;
+
 
 int isdir(const char *path) {
    struct stat statbuffer;
@@ -68,7 +73,7 @@ int processMode(const char *mode_string, mode_t *final_mode, char *path, struct 
   bool rwx[3] = {0, 0, 0};
   bool ugo[3] = {0, 0, 0};
   int set_mode = -1;
-  mode_t new_mode;
+  mode_t new_mode = 0;
 
 
   /* OCTAL MODE */
@@ -177,18 +182,33 @@ int processMode(const char *mode_string, mode_t *final_mode, char *path, struct 
       *final_mode = (file_mode & ~(S_IROTH | S_IWOTH | S_IXOTH)) | (new_mode & (S_IROTH | S_IWOTH | S_IXOTH));
     break;
   }
+
+  if (file_mode != *final_mode) nfmod++;
+
   return 0;
 }
 
 int xmod(char *path, char *mode_string) {
   clock_t initial_clock = clock();
   struct stat stat_buffer;
+  signal(SIGINT, inthandler);
+
+  //int st = setenv("LOG_FILENAME", argv[1], 1);
+    char* envVar = getenv("LOG_FILENAME");
+
+    if(envVar)
+        printf("Var found: %s", envVar);
+    else
+        printf("Var not found.");
+
+    
+
   if (stat (path, &stat_buffer)) {
     fprintf(stderr,"Check path name.\n");
     exit(1);
   }
-
-
+  else nftot++;
+  this_path = path;
 
   if(isdir(path)){
     struct dirent *directory_entry;
@@ -215,23 +235,37 @@ int xmod(char *path, char *mode_string) {
         }
         //Child process
         else if (childPid == 0) {
+
+          if(envVar){
+          FILE *fptr = NULL;
+          if ((fptr = fopen(envVar,"w")) == NULL){
+            printf("Error opening LOG_FILENAME file!");
+            exit(1);
+          };
+          puts("hey");
+
+          clock_t final_clock = clock();
+          double instant = (double)(final_clock - initial_clock) / CLOCKS_PER_SEC;
+          char* event = "PROC_CREAT";
+          char *info = malloc(sizeof(mode_string) + sizeof(' ') +sizeof(this_path));
+          sprintf(info, "%s%c%s", mode_string, ' ' , this_path);
+
+          fprintf(fptr, "%f ; %d ; %s ; %s\n", instant, getpid(), event, info);
+          fclose(fptr);
+        }
+
           char *argv[] = {"./xmod", new_path, mode_string, NULL};
           setenv("LOG_FILENAME", "1", true);
           printf("calling xmod for %s\n", new_path);
           execl("./xmod", "./xmod",mode_string, new_path,NULL);
           perror("execl");
         }
+        
         //Father process
         else {
           printf("path is %s and is parent process of new path %s\n\n", path, new_path);
         }
 
-          // bool LOG_FILENAME = true; //testing
-          //   if (LOG_FILENAME) {
-          //     clock_t final_clock = clock();
-          //     double instant = (double)(final_clock - initial_clock) / CLOCKS_PER_SEC;
-          //     fprintf(stdout, "%f ; %d ; action ; info\n", instant, childPid);
-          //   }
       }
       else {
         //chmod(new_path, final_mode);
@@ -241,7 +275,23 @@ int xmod(char *path, char *mode_string) {
   
   int returnStatus;  
   while (wait(&returnStatus) != -1) {
-    if (returnStatus == 0) {  // Child process terminated without error.  
+    if(envVar){
+        FILE *fptr = NULL;
+        if ((fptr = fopen(envVar,"w")) == NULL){
+          printf("Error opening LOG_FILENAME file!");
+          exit(1);
+        };
+
+        clock_t final_clock = clock();
+        double instant = (double)(final_clock - initial_clock) / CLOCKS_PER_SEC;
+        char* event = "PROC_EXIT";
+        char *info = malloc(sizeof(mode_string) + sizeof(' ') +sizeof(this_path));
+        sprintf(info, "%d", WIFEXITSTATUS(returnStatus));
+
+        fprintf(fptr, "%f ; %d ; %s ; %d\n", instant, getpid(), event, info);
+        fclose(fptr);
+    }
+    if (returnStatus == 0) {  // Child process terminated without error.
     }
     if (returnStatus == 1) {
       fprintf(stderr, "The child process terminated with an error!.");
@@ -250,158 +300,25 @@ int xmod(char *path, char *mode_string) {
 
   mode_t final_mode = 0;
   processMode(mode_string, &final_mode, path, stat_buffer);
-  // chmod(path, final_mode);
+  sleep(10);
+  chmod(path, final_mode);
+
+  
   return 0;
 }
 
 
-// int xmod (char *path, bool ugo[3], mode_t new_mode, struct stat stat_buffer) {
-//   mode_t final_mode = 0;
-//   getFinalMode(path, ugo, new_mode, set_mode, stat_buffer, &final_mode);
-//   // chmod(path, final_mode);
-//   return 0;
-// }
+void inthandler(int signo){
+    pid_t pid;
+    pid = getpid();
+    printf("\n%d ; %s ; %d ; %d\n", pid, this_path, nftot, nfmod);
+    puts("\n\nTerminate(t) or proceed(any key)?");
+    char strvar;
+    //sleep(3);
+    strvar = getchar();
+    if (strvar == 't')
+      exit(0);
+    else
+      puts("\n\nThe program will continue normally");
 
-
-// int processMode(const char *mode_string, char *new_mode, char *set_mode, char* ugoa) {
-  
-//   bool rwx[3] = {0, 0, 0};
-//   bool ugo[3] = {0, 0, 0};
-//   /* OCTAL MODE */
-//   if (mode_string[0] == '0') {
-//       unsigned int temp_mode;
-//       if (sscanf(mode_string, "%o", &temp_mode) != 1) {
-//           exit(1);
-//       }
-//       *new_mode = temp_mode;
-//       return 0;
-//   }
-
-//   /* <ugoa><-+=><rwx> MODE */
-//   //Needs at least 1 char in <ugoa>, 1 char in <-+=> and 1 char in <rwx>
-//   if (strlen(mode_string) < MIN_MODE_SIZE) {
-//       fprintf(stderr, "Mode string is too small.\n");
-//       exit(1);
-//   }
-
-//   //Has at most 1 char in <ugoa>, 1 char in <-+=> and 3 chars in <rwx>
-//   if (strlen(mode_string) > MAX_MODE_SIZE) {
-//       fprintf(stderr, "Mode string is too big.\n");
-//       exit(1);
-//   }
-
-//   switch (mode_string[0]){
-//   case 'u':
-//       ugo[0] = true;
-//       *ugoa = "u";
-//       break;
-//   case 'g':
-//       ugo[1] = true;
-//       *ugoa = "g";
-//       break;
-//   case 'o':
-//       ugo[2] = true;
-//       *ugoa = "o";
-//       break;
-//   case 'a':
-//       ugo[0] = true;
-//       ugo[1] = true;
-//       ugo[2] = true;
-//       *ugoa = "a";
-//       break;
-//   default:
-//       fprintf(stderr, "Character 1 in mode isn't valid.\n");
-//       exit(1);
-//   }
- 
-//   if((mode_string[1] == '-') | (mode_string[1] == '+') | (mode_string[1] == '=')) {
-//     *set_mode = mode_string[1];
-//   }
-//   else {
-//     fprintf(stderr, "Character 2 in mode isn't valid.\n");
-//     exit(1);
-//   }
-
-//   for (int i = 2; i < strlen(mode_string); i++) {
-//     switch (mode_string[i]){
-//     case 'r':
-//         rwx[0] = true;
-//         break;
-//     case 'w':
-//         rwx[1] = true;
-//         break;
-//     case 'x':
-//         rwx[2] = true;
-//         break;
-//     default:
-//         fprintf(stderr, "Character %i in mode isn't valid.\n", i);
-//         exit(1);
-//     }
-//   }
-
-//   unsigned int temp_mode = 0;
-//   if (rwx[0]) {
-//     if (ugo[0])
-//       temp_mode |= S_IRUSR;
-//     if (ugo[1])
-//       temp_mode |= S_IRGRP;
-//     if (ugo[2])
-//       temp_mode |= S_IROTH;
-//   }
-//   if (rwx[1]) {
-//     if (ugo[0])
-//       temp_mode |= S_IWUSR;
-//     if (ugo[1])
-//       temp_mode |= S_IWGRP;
-//     if (ugo[2])
-//       temp_mode |= S_IWOTH;
-//   }
-//   if (rwx[2]) {
-//     if (ugo[0])
-//       temp_mode |= S_IXUSR;
-//     if (ugo[1])
-//       temp_mode |= S_IXGRP;
-//     if (ugo[2])
-//       temp_mode |= S_IXOTH;
-//   }
-
-//   *new_mode = temp_mode;
-
-//   return 0;
-// }
-
-// int getFinalMode(char *path, char  *new_mode, char *set_mode, struct stat stat_buffer, mode_t *final_mode) {
-//   mode_t file_mode, current_mode;
-//   file_mode = stat_buffer.st_mode & ~S_IFMT;
-//   current_mode = new_mode;
-
-//   bool ugo[3] = {0, 0, 0};
-
-
-//   switch (set_mode[0]) {
-
-//   // - case
-//   case '-':
-//     *final_mode = (file_mode & ~current_mode);
-//     break;
-
-//   // + case
-//   case '+':
-//     *final_mode = (file_mode | current_mode);
-//     break;
-    
-//   // = case
-//   case '=':
-//     if ((ugo[0]))
-//       *final_mode = (file_mode & ~(S_ISUID | S_IRUSR | S_IWUSR | S_IXUSR)) | (current_mode & (S_ISUID | S_IRUSR | S_IWUSR | S_IXUSR));
-//     if ((ugo[1]))
-//       *final_mode = (file_mode & ~(S_ISGID | S_IRGRP | S_IWGRP | S_IXGRP)) | (current_mode & (S_ISGID | S_IRGRP | S_IWGRP | S_IXGRP));
-//     if ((ugo[2]))
-//       *final_mode = (file_mode & ~(S_IROTH | S_IWOTH | S_IXOTH)) | (current_mode & (S_IROTH | S_IWOTH | S_IXOTH));
-//     break;
-//   default:
-//     exit(1);
-//   }
-
-//   return 0;
-// }
+}

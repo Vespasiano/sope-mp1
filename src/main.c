@@ -9,11 +9,13 @@
 
 #include "xmod.h"
 
+
 struct option {
     bool verbose;
     bool cVerbose;
     bool recursive;
 };
+
 
 // void myfilerecursive(char *basePath)
 // {
@@ -40,7 +42,6 @@ struct option {
 
 //     closedir(dir);
 // } 
-
 
 
 
@@ -88,7 +89,7 @@ int main(int argc, char** argv) {
         return 1;
       }
       mode_t file_mode = stat_buffer.st_mode & ~S_IFMT;
-      xmod();
+      //xmod();
       if (options.recursive && isdir(path, stat_buffer)) {
 
       }
@@ -101,4 +102,3 @@ int main(int argc, char** argv) {
     
     return 0;
 }
-
