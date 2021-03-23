@@ -24,14 +24,6 @@ char* this_path;
 char* event;
 bool verbose = false;
 
-void upcase(char *s) {
-  for (int i = 0; s[i]!='\0'; i++) {
-    if(s[i] >= 'a' && s[i] <= 'z') {
-      s[i] = s[i] -32;
-    }
-  }
-  return;
-}
 
 int isdir(const char *path) {
    struct stat statbuffer;
@@ -49,7 +41,7 @@ unsigned long calculateInstant() {
   return instant;
 }
 
-void registerSignal(int signo){
+void registerReceivedSignal(char* c){
   FILE *fptr = NULL;
   if ((fptr = fopen(getenv("LOG_FILENAME"), "a")) == NULL) {
     printf("Error opening file\n");
@@ -58,16 +50,31 @@ void registerSignal(int signo){
   unsigned int instant = calculateInstant();
   event = "SIGNAL_RECV";
   char *info = malloc(100 * sizeof(char));
-  char *signal_string = malloc(100 * sizeof(char));
-  signal_string = strsignal(signo);
-  
-  sprintf(info, "SIG%s", signal_string);
+
+  sprintf(info, "SIG%s", c);
+  fprintf(fptr, "%u ; %d ; %s ; %s\n", instant, getpid(), event, info);
+  fclose(fptr);
+}
+
+void registerSentSignal(int signo, pid_t p){
+  FILE *fptr = NULL;
+  if ((fptr = fopen(getenv("LOG_FILENAME"),"a")) == NULL){
+    printf("Error opening file!");
+    exit(1);
+  };
+
+  unsigned int instant = calculateInstant();
+  event = "SIGNAL_SENT";
+  char *info = malloc(100 * sizeof(char));
+
+  sprintf(info, "SIG%i : %i (group)", signo, p);
   fprintf(fptr, "%u ; %d ; %s ; %s\n", instant, getpid(), event, info);
   fclose(fptr);
 }
 
 void sigINTHandler(int signo){
-  registerSignal(signo);
+  char *s = "INT";
+  registerReceivedSignal(s);
   pid_t pid = getpid();
   pid_t original_father_pid = (pid_t) atoi(getenv("PROGRAM_PID"));
   printf("\n%d ; %s ; %d ; %d\n", pid, this_path, nftot, nfmod);
@@ -79,6 +86,7 @@ void sigINTHandler(int signo){
     else { 
       puts("\nThe program will continue normally\n");
       pid_t group_pid = getpgid(pid);
+      registerSentSignal(SIGUSR1, group_pid);
       killpg(group_pid, SIGUSR1);
       }
 
@@ -87,12 +95,14 @@ void sigINTHandler(int signo){
 }
 
 void sigUSR1Handler(int signo) {
-  registerSignal(signo);
+  char *s = "USR1";
+  registerReceivedSignal(s);
   return;
 }
 
 void procExitHandler(int signo) {
-  registerSignal(signo);
+  char *s = "CHLD";
+  registerReceivedSignal(s);
   int wstat;
   pid_t	child_pid;
   FILE *fptr = NULL;
@@ -273,18 +283,15 @@ int processMode(const char *mode_string, mode_t *final_mode, char *path, struct 
 int xmod(char *path, char *mode_string, struct stat stat_buffer, char *options_string, struct option options) {
   verbose = options.verbose;
 
-
-
+  //Signals that will be handled
   signal(SIGINT, sigINTHandler);
   signal(SIGCHLD, procExitHandler);
   signal(SIGUSR1, sigUSR1Handler);
-
 
   nftot++;
   this_path = path;
 
   if(isdir(path) && options.recursive){
-
 
     struct dirent *directory_entry;
     DIR *dr = opendir(path);
@@ -340,17 +347,6 @@ int xmod(char *path, char *mode_string, struct stat stat_buffer, char *options_s
             printf("From parent process %i created child process %i\n", (int) getpid(), childPid);
           }
           pause();
-          // int finished_child_pid;  
-          // while (wait(&finished_child_pid) != -1) {
-          //   if (finished_child_pid == 0) { }  // Child process terminated without error.
-          //   if (finished_child_pid == 1) { fprintf(stderr, "The child process terminated with an error!."); }
-          //   printf("Return status of child process is %i, current process is %i with path %s\n", finished_child_pid, (int) getpid(), path);
-          // }
-
-
-
-
-
 
         }
       }
@@ -368,9 +364,9 @@ int xmod(char *path, char *mode_string, struct stat stat_buffer, char *options_s
   if (options.verbose || options.cVerbose) {
     printf("Changed mode of file %s to 0%s\n", path, final_mode_string);
   }
+
   chmod(path, final_mode);
 
-  
   return 0;
 }
 

@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
     fclose(fptr);
   }
   
-
+  /* [OPTIONS] */
   char opt;
   extern int optind;
   char *options_string = malloc(200 * sizeof(char));
